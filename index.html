@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice Navigation Assistant</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .mic-button {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .listening {
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div class="max-w-2xl mx-auto p-6">
+        <div class="text-center mb-8">
+            <h1 class="text-3xl font-bold mb-4">Voice Navigation Assistant</h1>
+            <p class="text-gray-600">Try saying: "Navigate to work" or "Take me home"</p>
+        </div>
+
+        <div class="flex justify-center mb-8">
+            <button id="micButton" class="mic-button bg-blue-500 hover:bg-blue-600 text-white">
+                🎤
+            </button>
+        </div>
+
+        <div id="transcriptBox" class="hidden mb-4 p-4 bg-gray-100 rounded-lg">
+            <p class="text-sm text-gray-500">You said:</p>
+            <p id="transcript" class="font-medium"></p>
+        </div>
+
+        <div id="responseBox" class="hidden mb-4 p-4 bg-blue-100 rounded-lg">
+            <p class="text-sm text-blue-500">Assistant:</p>
+            <p id="response" class="font-medium"></p>
+        </div>
+
+        <div id="routeBox" class="hidden p-4 bg-white shadow-lg rounded-lg">
+            <h2 class="font-bold mb-2">Current Route</h2>
+            <div id="routeDetails" class="space-y-2"></div>
+        </div>
+    </div>
+
+    <script>
+        const locations = {
+            'home': '123 Home Street',
+            'work': '456 Office Avenue',
+            'cafe': 'Coffee Haven, Downtown',
+            'gym': 'FitLife Center',
+            'supermarket': 'Fresh Grocery Store'
+        };
+
+        let isListening = false;
+        const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+        recognition.continuous = false;
+        recognition.interimResults = false;
+
+        const micButton = document.getElementById('micButton');
+        const transcriptBox = document.getElementById('transcriptBox');
+        const responseBox = document.getElementById('responseBox');
+        const routeBox = document.getElementById('routeBox');
+        const transcriptText = document.getElementById('transcript');
+        const responseText = document.getElementById('response');
+        const routeDetails = document.getElementById('routeDetails');
+
+        function processCommand(command) {
+            const cmd = command.toLowerCase();
+            let response = '';
+            let route = null;
+
+            // Find destination
+            const destination = Object.keys(locations).find(loc => cmd.includes(loc));
+            
+            if (destination) {
+                const isScenic = cmd.includes('scenic');
+                const routeType = isScenic ? 'scenic' : 'fastest';
+                
+                route = {
+                    destination: locations[destination],
+                    type: routeType,
+                    estimatedTime: Math.floor(Math.random() * 30 + 15) // Random time between 15-45 mins
+                };
+
+                response = `Planning ${routeType} route to ${destination}. Estimated time: ${route.estimatedTime} minutes.`;
+                
+                // Display route details
+                routeDetails.innerHTML = `
+                    <p><strong>Destination:</strong> ${route.destination}</p>
+                    <p><strong>Route Type:</strong> ${route.type}</p>
+                    <p><strong>ETA:</strong> ${route.estimatedTime} minutes</p>
+                `;
+                routeBox.classList.remove('hidden');
+            } else {
+                response = "I couldn't find that location. Available destinations are: " + 
+                          Object.keys(locations).join(', ');
+                routeBox.classList.add('hidden');
+            }
+
+            return response;
+        }
+
+        micButton.addEventListener('click', () => {
+            if (isListening) {
+                recognition.stop();
+                micButton.classList.remove('listening', 'bg-red-500');
+                micButton.classList.add('bg-blue-500');
+            } else {
+                recognition.start();
+                micButton.classList.add('listening', 'bg-red-500');
+                micButton.classList.remove('bg-blue-500');
+            }
+            isListening = !isListening;
+        });
+
+        recognition.onresult = (event) => {
+            const transcript = event.results[0][0].transcript;
+            transcriptText.textContent = transcript;
+            transcriptBox.classList.remove('hidden');
+
+            const response = processCommand(transcript);
+            responseText.textContent = response;
+            responseBox.classList.remove('hidden');
+
+            // Text to speech
+            const speech = new SpeechSynthesisUtterance(response);
+            window.speechSynthesis.speak(speech);
+
+            // Reset microphone button
+            isListening = false;
+            micButton.classList.remove('listening', 'bg-red-500');
+            micButton.classList.add('bg-blue-500');
+        };
+
+        recognition.onerror = (event) => {
+            console.error('Speech recognition error:', event.error);
+            isListening = false;
+            micButton.classList.remove('listening', 'bg-red-500');
+            micButton.classList.add('bg-blue-500');
+        };
+    </script>
+</body>
+</html>
