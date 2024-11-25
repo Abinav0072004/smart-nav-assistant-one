@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Voice Navigation Assistant</title>
+    <title>Interactive Navigation Assistant</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         .mic-button {
@@ -29,8 +29,8 @@
 <body class="bg-gray-50">
     <div class="max-w-2xl mx-auto p-6">
         <div class="text-center mb-8">
-            <h1 class="text-3xl font-bold mb-4">Voice Navigation Assistant</h1>
-            <p class="text-gray-600">Try saying: "Navigate to work" or "Take me home"</p>
+            <h1 class="text-3xl font-bold mb-4">Interactive Navigation Assistant</h1>
+            <p class="text-gray-600">Try saying: "Navigate to work" or "Plan a trip to cafe"</p>
         </div>
 
         <div class="flex justify-center mb-8">
@@ -39,15 +39,7 @@
             </button>
         </div>
 
-        <div id="transcriptBox" class="hidden mb-4 p-4 bg-gray-100 rounded-lg">
-            <p class="text-sm text-gray-500">You said:</p>
-            <p id="transcript" class="font-medium"></p>
-        </div>
-
-        <div id="responseBox" class="hidden mb-4 p-4 bg-blue-100 rounded-lg">
-            <p class="text-sm text-blue-500">Assistant:</p>
-            <p id="response" class="font-medium"></p>
-        </div>
+        <div id="conversationBox" class="mb-4 space-y-4"></div>
 
         <div id="routeBox" class="hidden p-4 bg-white shadow-lg rounded-lg">
             <h2 class="font-bold mb-2">Current Route</h2>
@@ -57,11 +49,40 @@
 
     <script>
         const locations = {
-            'home': '123 Home Street',
-            'work': '456 Office Avenue',
-            'cafe': 'Coffee Haven, Downtown',
-            'gym': 'FitLife Center',
-            'supermarket': 'Fresh Grocery Store'
+            'home': {
+                address: '123 Home Street',
+                favorites: ['usual cafe', 'grocery store']
+            },
+            'work': {
+                address: '456 Office Avenue',
+                nearby: ['coffee shop', 'lunch spots']
+            },
+            'cafe': {
+                address: 'Coffee Haven, Downtown',
+                speciality: 'morning coffee'
+            },
+            'gym': {
+                address: 'FitLife Center',
+                peakHours: ['morning', 'evening']
+            },
+            'supermarket': {
+                address: 'Fresh Grocery Store',
+                bestTimes: ['afternoon']
+            }
+        };
+
+        const routePreferences = {
+            'scenic': 'A more relaxed route with better views',
+            'fastest': 'The quickest route available',
+            'quiet': 'A route avoiding main roads',
+            'traffic-free': 'Routes avoiding known traffic areas'
+        };
+
+        let conversationState = {
+            isWaitingForResponse: false,
+            currentQuery: null,
+            route: null,
+            context: {}
         };
 
         let isListening = false;
@@ -70,47 +91,101 @@
         recognition.interimResults = false;
 
         const micButton = document.getElementById('micButton');
-        const transcriptBox = document.getElementById('transcriptBox');
-        const responseBox = document.getElementById('responseBox');
+        const conversationBox = document.getElementById('conversationBox');
         const routeBox = document.getElementById('routeBox');
-        const transcriptText = document.getElementById('transcript');
-        const responseText = document.getElementById('response');
         const routeDetails = document.getElementById('routeDetails');
+
+        function addToConversation(text, isUser = false) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `p-4 rounded-lg ${isUser ? 'bg-blue-100 ml-12' : 'bg-gray-100 mr-12'}`;
+            messageDiv.innerHTML = `
+                <p class="text-sm ${isUser ? 'text-blue-500' : 'text-gray-500'}">${isUser ? 'You' : 'Assistant'}:</p>
+                <p class="font-medium">${text}</p>
+            `;
+            conversationBox.appendChild(messageDiv);
+            conversationBox.scrollTop = conversationBox.scrollHeight;
+        }
+
+        function speak(text) {
+            const speech = new SpeechSynthesisUtterance(text);
+            window.speechSynthesis.speak(speech);
+            addToConversation(text);
+        }
+
+        function askFollowUpQuestion() {
+            if (!conversationState.route) return;
+
+            const questions = [
+                "Would you like to hear about points of interest along the way?",
+                "Should I suggest some stops based on your usual preferences?",
+                "Would you like to know about traffic conditions?",
+                "Should I check for any events that might affect your route?"
+            ];
+
+            const question = questions[Math.floor(Math.random() * questions.length)];
+            speak(question);
+            conversationState.isWaitingForResponse = true;
+        }
 
         function processCommand(command) {
             const cmd = command.toLowerCase();
-            let response = '';
-            let route = null;
+            
+            // Handle yes/no responses first
+            if (conversationState.isWaitingForResponse) {
+                if (cmd.includes('yes') || cmd.includes('sure') || cmd.includes('okay')) {
+                    conversationState.isWaitingForResponse = false;
+                    const responses = [
+                        "I found several interesting places along your route. There's a popular cafe and a park you might like.",
+                        "Based on your history, you might want to stop at your usual cafe. It's just a 2-minute detour.",
+                        "Traffic looks good on your route. You should arrive on time.",
+                        "There's a local event happening near your destination. You might want to leave 10 minutes earlier."
+                    ];
+                    speak(responses[Math.floor(Math.random() * responses.length)]);
+                    return;
+                } else if (cmd.includes('no') || cmd.includes('nope')) {
+                    conversationState.isWaitingForResponse = false;
+                    speak("Alright, let me know if you need anything else!");
+                    return;
+                }
+            }
 
-            // Find destination
+            // Process navigation commands
             const destination = Object.keys(locations).find(loc => cmd.includes(loc));
             
             if (destination) {
                 const isScenic = cmd.includes('scenic');
-                const routeType = isScenic ? 'scenic' : 'fastest';
+                const isQuiet = cmd.includes('quiet');
+                const routeType = isScenic ? 'scenic' : (isQuiet ? 'quiet' : 'fastest');
                 
-                route = {
-                    destination: locations[destination],
+                conversationState.route = {
+                    destination: locations[destination].address,
                     type: routeType,
-                    estimatedTime: Math.floor(Math.random() * 30 + 15) // Random time between 15-45 mins
+                    estimatedTime: Math.floor(Math.random() * 30 + 15)
                 };
 
-                response = `Planning ${routeType} route to ${destination}. Estimated time: ${route.estimatedTime} minutes.`;
-                
                 // Display route details
                 routeDetails.innerHTML = `
-                    <p><strong>Destination:</strong> ${route.destination}</p>
-                    <p><strong>Route Type:</strong> ${route.type}</p>
-                    <p><strong>ETA:</strong> ${route.estimatedTime} minutes</p>
+                    <p><strong>Destination:</strong> ${conversationState.route.destination}</p>
+                    <p><strong>Route Type:</strong> ${routeType}</p>
+                    <p><strong>ETA:</strong> ${conversationState.route.estimatedTime} minutes</p>
                 `;
                 routeBox.classList.remove('hidden');
-            } else {
-                response = "I couldn't find that location. Available destinations are: " + 
-                          Object.keys(locations).join(', ');
-                routeBox.classList.add('hidden');
+
+                const response = `I've found a ${routeType} route to ${destination}. Estimated time is ${conversationState.route.estimatedTime} minutes.`;
+                speak(response);
+
+                // Ask follow-up question after a short delay
+                setTimeout(askFollowUpQuestion, 2000);
+                return;
             }
 
-            return response;
+            // Handle general queries
+            if (cmd.includes('help') || cmd.includes('what can you do')) {
+                speak("I can help you navigate to saved locations like home, work, cafe, gym, or supermarket. You can ask for scenic or quiet routes, and I can provide information about stops and traffic. What would you like to do?");
+                return;
+            }
+
+            speak("I'm not sure about that location. I know how to get to: " + Object.keys(locations).join(', '));
         }
 
         micButton.addEventListener('click', () => {
@@ -128,16 +203,8 @@
 
         recognition.onresult = (event) => {
             const transcript = event.results[0][0].transcript;
-            transcriptText.textContent = transcript;
-            transcriptBox.classList.remove('hidden');
-
-            const response = processCommand(transcript);
-            responseText.textContent = response;
-            responseBox.classList.remove('hidden');
-
-            // Text to speech
-            const speech = new SpeechSynthesisUtterance(response);
-            window.speechSynthesis.speak(speech);
+            addToConversation(transcript, true);
+            processCommand(transcript);
 
             // Reset microphone button
             isListening = false;
@@ -151,6 +218,11 @@
             micButton.classList.remove('listening', 'bg-red-500');
             micButton.classList.add('bg-blue-500');
         };
+
+        // Initial greeting
+        setTimeout(() => {
+            speak("Hello! I can help you navigate to your favorite places. Try saying 'Navigate to work' or ask me 'What can you do?'");
+        }, 1000);
     </script>
 </body>
 </html>
